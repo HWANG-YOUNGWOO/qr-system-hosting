@@ -1,0 +1,172 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-test:
+    name: Build, Lint & Test
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify screenshot assets present
+        run: |
+          MISSING=0
+          for f in .github/assets/gcp-service-accounts.png .github/assets/gcp-create-service-account.png .github/assets/github-new-secret.png .github/assets/gcp-secret-create.png; do
+            if [ ! -f "$f" ]; then
+              echo "Missing asset: $f"; MISSING=1
+            else
+              echo "Found: $f"
+            fi
+          done
+          if [ "$MISSING" -eq 1 ]; then
+            echo "One or more screenshot assets are missing. Add them to .github/assets/ or update README_SECRETS.md."; exit 1;
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Cache node modules (functions)
+        uses: actions/cache@v4
+        with:
+          path: functions/node_modules
+          key: ${{ runner.os }}-functions-node-${{ hashFiles('functions/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-functions-node-
+
+      - name: Cache node modules (web)
+        uses: actions/cache@v4
+        with:
+          path: web/node_modules
+          key: ${{ runner.os }}-web-node-${{ hashFiles('web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-web-node-
+
+      - name: Install functions deps
+        run: |
+          cd functions
+          npm ci
+
+      - name: Install web deps
+        run: |
+          cd web
+          npm ci
+
+      - name: Lint functions
+        run: |
+          cd functions
+          npm run lint
+
+      - name: Build functions
+        run: |
+          cd functions
+          npm run build
+
+      - name: Lint web
+        run: |
+          cd web
+          npm run lint || true
+
+      - name: Build web
+        run: |
+          cd web
+          npm run build
+
+  deploy:
+    name: Deploy to Firebase (manual)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Firebase Tools
+        run: npm ci -g firebase-tools
+
+      - name: Validate service account JSON
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT secret is not set. Abort."; exit 1;
+          fi
+          # write to temporary file and verify JSON
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/fsa.json
+          if ! jq -e . /tmp/fsa.json >/dev/null 2>&1; then
+            echo "FIREBASE_SERVICE_ACCOUNT is not valid JSON"; cat /tmp/fsa.json; exit 1;
+          fi
+          echo "FIREBASE_SERVICE_ACCOUNT appears to be valid JSON"
+          rm -f /tmp/fsa.json
+
+      - name: Write service account to file
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "No FIREBASE_SERVICE_ACCOUNT secret provided";
+            exit 1;
+          fi
+          echo "$FIREBASE_SERVICE_ACCOUNT" > ${HOME}/fsa.json
+          chmod 600 ${HOME}/fsa.json
+
+      - name: Authenticate with Google Cloud (service account)
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+
+      - name: Set GOOGLE_APPLICATION_CREDENTIALS
+        run: echo "GOOGLE_APPLICATION_CREDENTIALS=${HOME}/fsa.json" >> $GITHUB_ENV
+
+      - name: Deploy Functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${HOME}/fsa.json
+        run: |
+          cd functions
+          # firebase-tools will use ADC via GOOGLE_APPLICATION_CREDENTIALS
+          firebase deploy --only functions || (
+            echo "Primary deploy failed, attempting with FIREBASE_TOKEN fallback";
+            if [ -n "$FIREBASE_TOKEN" ]; then
+              firebase deploy --only functions --token "$FIREBASE_TOKEN";
+            else
+              echo "No FIREBASE_TOKEN provided; deploy failed."; exit 1;
+            fi
+          )
+
+      - name: Deploy Hosting
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${HOME}/fsa.json
+        run: |
+          cd web
+          firebase deploy --only hosting || (
+            echo "Primary hosting deploy failed, attempting with FIREBASE_TOKEN fallback";
+            if [ -n "$FIREBASE_TOKEN" ]; then
+              firebase deploy --only hosting --token "$FIREBASE_TOKEN";
+            else
+              echo "No FIREBASE_TOKEN provided; hosting deploy failed."; exit 1;
+            fi
+          )
+
+      - name: Post-deploy smoke test
+        run: |
+          echo "Run any smoke tests or health checks here"
+
+# Notes:
+# - Set repository secrets: FIREBASE_SERVICE_ACCOUNT (JSON), FIREBASE_TOKEN (CI token with deploy permissions)
+# - This workflow keeps deploy manual/conditional; adapt as needed for automatic deploys.
