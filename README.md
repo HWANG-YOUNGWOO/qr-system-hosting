@@ -85,4 +85,4 @@ For a step-by-step capture guide and example screenshots, see `README_SECRETS.md
 - `firebase deploy --only functions,hosting`
 
 ## 추가 도움말
-원하시면 `README`에 배포용 스크립트나 PowerShell 실행 스크립트를 추가해 드리겠습니다...
+원하시면 `README`에 배포용 스크립트나 PowerShell 실행 스크립트를 추가해 드리겠습니다.

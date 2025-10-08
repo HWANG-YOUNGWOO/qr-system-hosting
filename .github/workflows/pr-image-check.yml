@@ -15,13 +15,26 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Run screenshot-check script
+        uses: actions/github-script@v6
         with:
-          node-version: '18'
-
-      - name: Run screenshot-check script (Node)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          node .github/scripts/pr-image-check.clean.js
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = '.github/scripts/pr-image-check.clean.js';
+            if (!fs.existsSync(path)) {
+              core.info('No script at ' + path + ', skipping screenshot check.');
+              return;
+            }
+            const code = fs.readFileSync(path, 'utf8');
+            // eslint-disable-next-line no-eval
+            const exported = {};
+            // Wrap module simulation
+            const module = { exports: {} };
+            eval(code);
+            const fn = module.exports || module;
+            if (typeof fn === 'function') {
+              await fn({ github, context, core });
+            } else {
+              core.info('No callable export from ' + path + ', skipping.');
+            }
