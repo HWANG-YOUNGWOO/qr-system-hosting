@@ -1,0 +1,31 @@
+name: PR Screenshot Check (clean)
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  check-screenshots:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Run screenshot-check script
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = '.github/scripts/pr-image-check.clean.js';
+            if (!fs.existsSync(path)) {
+              core.info('No script at ' + path + ', skipping screenshot check.');
+              return;
+            }
+            const code = fs.readFileSync(path, 'utf8');
+            // eslint-disable-next-line no-eval
+            eval(code);

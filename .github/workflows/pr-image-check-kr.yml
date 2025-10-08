@@ -1,0 +1,95 @@
+name: PR 스크린샷 검사 (한국어)
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  check-screenshots:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: 스크린샷 체크 후 코멘트 작성/업데이트
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const required = [
+              '.github/assets/gcp-service-accounts.png',
+              '.github/assets/gcp-create-service-account.png',
+              '.github/assets/github-new-secret.png',
+              '.github/assets/gcp-secret-create.png'
+            ];
+
+            const pr = context.payload.pull_request;
+            if (!pr) return core.info('No pull_request payload, skipping');
+            const prNumber = pr.number;
+
+            const body = pr.body || '';
+            const foundInBody = required.filter(fn => body.indexOf(fn) !== -1);
+
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber, per_page: 200 });
+            const changed = files.map(f => f.filename || '');
+            const foundInFiles = required.filter(fn => changed.indexOf(fn) !== -1);
+
+            if (foundInBody.length === 0 && foundInFiles.length === 0) {
+              const checklist = ['- [ ] 스크린샷을 .github/assets/에 추가', '- [ ] 민감 정보는 블러/가림 처리', '- [ ] PR 설명에 이미지 링크 추가'].join('\n');
+              const howto = '예: ![서비스 계정](.github/assets/gcp-service-accounts.png)';
+              const examples = required.map(r => '- ' + r).join('\n');
+
+              const prTemplate = [
+                '## 변경 내용 요약',
+                '',
+                '- 무엇을 변경했나요?',
+                '- 왜 변경했나요?',
+                '',
+                '## 확인 방법',
+                '',
+                '- 로컬에서 확인하는 방법 (예: Firebase emulator 실행)',
+                '',
+                '## 추가 참고 (선택 사항)'
+              ].join('\n');
+
+              const commentBody = [
+                ':warning: **스크린샷이 없습니다**',
+                '',
+                '리뷰가 원활히 진행되도록 아래 체크리스트를 따라주시면 감사하겠습니다.',
+                '',
+                '**간단 체크리스트**',
+                checklist,
+                '',
+                '**이미지 추가 방법**',
+                howto,
+                '',
+                '**예시 파일 (.github/assets/)**',
+                examples,
+                '',
+                '---',
+                '아래 템플릿을 PR 설명에 복사해 붙여넣어 주세요 (필요시 수정)',
+                '',
+                prTemplate,
+                '',
+                '---',
+                '자동 알림: PR 스크린샷 검사봇'
+              ].join('\n');
+
+              const comments = await github.rest.issues.listComments({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, per_page: 200 });
+              const marker = '자동 알림: PR 스크린샷 검사봇';
+              const existing = comments.data.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.indexOf(marker) !== -1);
+
+              if (existing) {
+                await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body: commentBody });
+                core.info('기존 봇 코멘트를 업데이트했습니다.');
+              } else {
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: commentBody });
+                core.info('새로운 봇 코멘트를 생성했습니다.');
+              }
+
+              throw new Error('스크린샷이 PR에 없습니다. 코멘트를 확인하세요.');
+            }
