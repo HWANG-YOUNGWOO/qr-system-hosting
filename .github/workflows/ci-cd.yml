@@ -171,5 +171,5 @@ jobs:
           echo "Run any smoke tests or health checks here"
 
 # Notes:
-# - Set repository secrets: FIREBASE_SERVICE_ACCOUNT (JSON), FIREBASE_TOKEN (CI token with deploy permissions)
+# - Set repository secrets: FIREBASE_SERVICE_ACCOUNT (JSON), FIREBASE_TOKEN (CI token with deploy permissions).
 # - This workflow keeps deploy manual/conditional; adapt as needed for automatic deploys.
