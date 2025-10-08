@@ -22,19 +22,27 @@ jobs:
           script: |
             const fs = require('fs');
             const path = '.github/scripts/pr-image-check.clean.js';
+            // Provide a safe 'core' fallback for the eval context. github-script does not
+            // automatically inject '@actions/core', but the external script expects a
+            // `core` object with info/setFailed methods. Create a tiny wrapper that
+            // forwards to console when real core isn't available.
+            const safeCore = {
+              info: (msg) => { try { console.log(msg); } catch(e) {} },
+              setFailed: (msg) => { try { throw new Error(msg); } catch(e) { throw e } }
+            };
             if (!fs.existsSync(path)) {
-              core.info('No script at ' + path + ', skipping screenshot check.');
+              console.log('No script at ' + path + ', skipping screenshot check.');
               return;
             }
             const code = fs.readFileSync(path, 'utf8');
             // eslint-disable-next-line no-eval
-            const exported = {};
-            // Wrap module simulation
             const module = { exports: {} };
+            // evaluate the module code in this context; it should populate module.exports
             eval(code);
-            const fn = module.exports || module;
+            const fn = module.exports && (typeof module.exports === 'function' ? module.exports : module.exports.default) || null;
             if (typeof fn === 'function') {
-              await fn({ github, context, core });
+              // pass our safeCore so the module can call core.info/core.setFailed
+              await fn({ github, context, core: (typeof core !== 'undefined' ? core : safeCore) });
             } else {
-              core.info('No callable export from ' + path + ', skipping.');
+              console.log('No callable export from ' + path + ', skipping.');
             }

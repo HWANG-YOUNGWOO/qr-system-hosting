@@ -165,3 +165,33 @@
 - **체크 실패 대응:** CI가 실패해도 정책상 머지가 가능할 수 있으나, 원인 파악 후 수정 권장
 
 ---
+
+## Windows: 자동화 스크립트 사용 예시 (PowerShell)
+
+저장소 루트에서 제공되는 PowerShell 헬퍼 스크립트를 사용하면 브랜치 푸시 → PR 생성 → 선택적 병합을 안전하게 자동화할 수 있습니다.
+
+1. 스크립트 위치: `.github\scripts\gh-push-pr.ps1`
+
+2. 간단 사용 예시:
+
+```powershell
+# 브랜치 푸시 및 PR 생성 (병합은 하지 않음)
+. .\.github\scripts\gh-push-pr.ps1 -Title "Add PR screenshot-check workflow" -Body "프로세스 설명을 여기에" -Base main
+
+# 브랜치 푸시 및 PR 생성 후 자동 머지(스쿼시) 및 브랜치 삭제
+. .\.github\scripts\gh-push-pr.ps1 -Title "Small fix" -Body "작업 설명" -Base main -Merge
+
+# 강제 푸시를 사용하려면 -ForcePush 스위치 추가
+. .\.github\scripts\gh-push-pr.ps1 -Title "Force push test" -Body "..." -ForcePush
+```
+
+3. 준비사항
+
+- Git과 GitHub CLI(gh) 설치 및 로그인 필요: `gh auth login`
+- PowerShell의 실행정책 때문에 스크립트 차단 시 임시로 허용:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+```
+
+이 스크립트는 일반적인 Windows 워크플로우를 단순화하기 위한 도구입니다. 원하시면 `--squash` 대신 `--rebase`나 `--merge` 전략을 선택하는 옵션을 추가해 드리겠습니다.

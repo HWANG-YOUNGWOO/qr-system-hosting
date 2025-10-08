@@ -1,4 +1,47 @@
 {
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../lib",
+    "rootDir": "src",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2017"
+  },
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "lib"]
+}
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../lib",
+    "rootDir": "src",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2017"
+  },
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "lib"]
+}
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../lib",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "lib"]
+}
+{
   "compilerOptions": {
     "module": "NodeNext",
     "esModuleInterop": true,
@@ -13,5 +56,20 @@
   "compileOnSave": true,
   "include": [
     "src"
-  ]
-}
+  {
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+      "outDir": "../lib",
+      "rootDir": "src",
+      "module": "commonjs",
+      "esModuleInterop": true,
+      "moduleResolution": "node",
+      "noImplicitReturns": true,
+      "noUnusedLocals": true,
+      "sourceMap": true,
+      "strict": true,
+      "target": "es2017"
+    },
+    "include": ["src/**/*", "test/**/*"],
+    "exclude": ["node_modules", "lib"]
+  }

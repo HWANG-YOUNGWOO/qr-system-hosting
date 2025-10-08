@@ -13,13 +13,18 @@ Firebase, Twilio, TypeScript 기반의 **안전한 OTP 인증 및 세션 관리 
 - **문자 OTP 전송**: Twilio  
 
 ### 🔑 Twilio Credentials
+
+NOTE: The original copy of this file contained hardcoded Twilio secrets. Those values have been REDACTED here.
+
 - **Live**
   - Account SID: `<YOUR_TWILIO_ACCOUNT_SID>`
-  - Auth Token: `9d4714ecfa1b1377bb0de512222de934`
-  - Verify Service SID: `VA08f96fc0851eb8fb1438b06b4f0f64cc`
+  - Auth Token: `<REDACTED — rotate immediately>`
+  - Verify Service SID: `<REDACTED — rotate immediately>`
 - **Test**
-  - Account SID: `<YOUR_TWILIO_ACCOUNT_SID>`
-  - Auth Token: `5f853f1d1c22ed01737663d9fe279931`
+  - Account SID: `<YOUR_TWILIO_TEST_ACCOUNT_SID>`
+  - Auth Token: `<REDACTED — rotate immediately>`
+
+Security action required: If you (or anyone) have published real secrets in this repository or any commit, rotate those credentials immediately (Twilio Console) and follow the repository history purge steps described in docs/SECRET_ROTATION.md.
 
 ### ☁️ Google Cloud Secret Manager 등록 항목
 - twilio-service-sid  
@@ -27,6 +32,58 @@ Firebase, Twilio, TypeScript 기반의 **안전한 OTP 인증 및 세션 관리 
 - twilio-token  
 - Test-twilio-Account-SID  
 - Test-twilio-Auth-token  
+
+#### 사용법 및 로컬 테스트
+
+1) 시크릿 생성(예시: gcloud CLI)
+
+```powershell
+# 프로젝트가 설정된 gcloud 환경에서
+gcloud secrets create twilio-sid --replication-policy="automatic"
+echo -n "<TWILIO_ACCOUNT_SID>" | gcloud secrets versions add twilio-sid --data-file=-
+
+gcloud secrets create twilio-token --replication-policy="automatic"
+echo -n "<TWILIO_AUTH_TOKEN>" | gcloud secrets versions add twilio-token --data-file=-
+
+gcloud secrets create twilio-service-sid --replication-policy="automatic"
+echo -n "<TWILIO_VERIFY_SERVICE_SID>" | gcloud secrets versions add twilio-service-sid --data-file=-
+```
+
+2) 시크릿 네이밍 규칙
+
+- 라이브: `twilio-sid`, `twilio-token`, `twilio-service-sid`
+- 테스트(선택): `Test-twilio-Account-SID`, `Test-twilio-Auth-token`, (선택) `Test-twilio-service-sid`
+
+3) 로컬 개발(Secret Manager 미사용) 폴백
+
+serviceTwilio 모듈은 먼저 환경변수로부터 값을 읽고(env 우선), 없으면 Google Secret Manager에서 값을 가져옵니다. 환경변수 이름(우선순위 예시):
+
+- TWILIO_ACCOUNT_SID (또는 TWILIO_SID)
+- TWILIO_AUTH_TOKEN (또는 TWILIO_TOKEN)
+- TWILIO_VERIFY_SERVICE_SID (또는 TWILIO_SERVICE_SID)
+
+4) 간단한 스모크 테스트 실행
+
+저장소에 포함된 간단한 테스트 스크립트로 env 폴백이 동작하는지 확인할 수 있습니다. 이 파일은 TypeScript(.ts)이며 아래 방법으로 실행하세요.
+
+```powershell
+# 1) ts-node가 설치되어 있으면 바로 실행
+npx ts-node ./functions/test/serviceTwilio.mock.test.ts
+
+# 2) 또는 프로젝트를 빌드한 후 Node로 실행
+npx tsc -p tsconfig.dev.json
+node ./functions/test/serviceTwilio.mock.test.js
+```
+
+테스트는 실제 Twilio 네트워크 호출을 수행하지 않으며, 환경변수/Secret Manager 파싱과 클라이언트 인스턴스화 경로만 간단히 검증합니다.
+
+5) 추가 보안 권장사항
+
+- 시크릿 생성 직후에는 Twilio 콘솔에서 토큰을 교체(rotate)하고, 과거에 노출된 자격증명은 즉시 폐기하세요.
+- 리포지토리 히스토리에 시크릿이 남아 있는 경우 `docs/SECRET_ROTATION.md`의 지침을 따르세요.
+
+Note: If you need to regenerate `functions/package-lock.json` (e.g., after adding dev deps like Jest), use the helper script `.github/scripts/regenerate-functions-lock.ps1`. Run it with Node 22 available and optionally pass `-AutoCommit` to commit & push the updated lockfile.
+
 
 ### 🔧 Firebase Config
 ```typescript

@@ -90,6 +90,11 @@ jobs:
           cd functions
           npm run build
 
+      - name: Test functions
+        run: |
+          cd functions
+          npm test
+
       - name: Lint web
         run: |
           cd web
