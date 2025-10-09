@@ -1,4 +1,5 @@
 import { onCall } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import { logStart, logEnd, logError } from '../utils/logger';
 import { sendVerificationCode, verifyCode } from '../serviceTwilio';
 import { v4 as uuidv4 } from 'uuid';
@@ -61,8 +62,21 @@ export const sendOtp = onCall(async (req) => {
     const input = req.data as SendOtpInput;
     const phoneKey = `${input.countryCode}-${input.phoneNumber}`;
 
-    // Server-side control: only allow test mode when environment explicitly permits it.
-    const allowTwilioTest = String(process.env.ALLOW_TWILIO_TEST || '').toLowerCase() === 'true';
+    // Server-side control: only allow test mode when configuration explicitly permits it.
+    // Priority: functions.config().twilio.allow_test (if available) -> process.env.ALLOW_TWILIO_TEST -> default false
+    let allowTwilioTest = false;
+    try {
+      const cfg = functions.config && functions.config();
+      const cfgVal = cfg?.twilio?.allow_test;
+      if (typeof cfgVal !== 'undefined') {
+        allowTwilioTest = String(cfgVal).toLowerCase() === 'true';
+      } else {
+        allowTwilioTest = String(process.env.ALLOW_TWILIO_TEST || '').toLowerCase() === 'true';
+      }
+    } catch (e) {
+      // If functions.config() is not available in this runtime, fall back to env
+      allowTwilioTest = String(process.env.ALLOW_TWILIO_TEST || '').toLowerCase() === 'true';
+    }
     const requestedTestMode = !!input.testModeFlag && allowTwilioTest;
     if (!!input.testModeFlag && !allowTwilioTest) {
       // Log that client requested test mode but server rejected it
