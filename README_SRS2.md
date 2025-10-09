@@ -111,6 +111,76 @@ Recommended steps:
 - Restrict Secret Manager access to test secrets using IAM and rotate secrets after use.
 - Audit logs: monitor `authEvents` for `test_mode` usage if you need to track test traffic.
 
+#### 배포 및 설정(빠른 가이드)
+
+다음은 Firebase 프로젝트에 `twilio.allow_test` 값을 안전하게 설정하고 검증하는 방법입니다. PowerShell에서 복사-붙여넣기 가능한 명령과 검증 방법을 제공합니다.
+
+방법 A — `functions.config()` 사용 (Firebase CLI)
+
+- 설정(개발 환경에서만 `true`로 설정):
+
+```powershell
+# 프로젝트 확인
+firebase use
+
+# 개발환경에서만 허용
+firebase functions:config:set twilio.allow_test="true"
+
+# 설정 확인
+firebase functions:config:get | ConvertFrom-Json
+```
+
+- 함수 재배포:
+
+```powershell
+firebase deploy --only functions
+```
+
+- 롤백:
+
+```powershell
+firebase functions:config:unset twilio.allow_test
+firebase deploy --only functions
+```
+
+방법 B — Cloud Functions v2 환경변수 (gcloud 사용)
+
+- 배포 시 환경변수 설정(예시):
+
+```powershell
+gcloud functions deploy sendOtp `
+  --gen2 `
+  --region=us-central1 `
+  --runtime=nodejs22 `
+  --entry-point=sendOtp `
+  --set-env-vars=ALLOW_TWILIO_TEST=true
+```
+
+- 기존 함수에 업데이트(예시):
+
+```powershell
+gcloud functions update sendOtp --set-env-vars=ALLOW_TWILIO_TEST=true --region=us-central1
+```
+
+- 환경변수 확인:
+
+```powershell
+gcloud functions describe sendOtp --region=us-central1 --format="json" | ConvertFrom-Json
+# 결과의 environmentVariables 필드를 확인하세요
+```
+
+검증 체크리스트
+
+- deploy/설정 후 `firebase functions:log --only sendOtp` 또는 Firebase 콘솔 로그에서 호출/거부 로그를 확인하세요.
+- 클라이언트(또는 curl/postman)를 사용해 `testModeFlag=true`로 `sendOtp`를 호출해 보고, Firestore의 `otpAttempts` 문서에 `testModeFlag: true`로 저장되는지 확인하세요.
+- 프로덕션에서는 절대 `twilio.allow_test` 또는 `ALLOW_TWILIO_TEST=true`를 설정하지 마세요.
+
+보안 권장
+
+- Test 시크릿(Secret Manager) 접근 권한은 최소 권한으로 제한하세요.
+- `authEvents`에 `test_mode_requested`/`test_mode_used` 이벤트를 로깅하면 감사 추적에 도움이 됩니다.
+
+
 
 ---
 
