@@ -5,10 +5,3 @@
     { "path": "./web" }
   ]
 }
-{
-  "files": [],
-  "references": [
-    { "path": "./functions" },
-    { "path": "./web" }
-  ]
-}

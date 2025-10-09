@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 // Vite 환경 변수를 사용합니다. VITE_ 접두사가 붙은 값은 클라이언트에서 접근 가능합니다.
 const firebaseConfig = {
@@ -10,13 +11,18 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const functions = getFunctions(app);
+const db = getFirestore(app);
 
 export function useEmulatorIfLocal() {
   const host = import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST || '127.0.0.1';
   const port = Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT || '5001');
   if (location.hostname === 'localhost') {
     connectFunctionsEmulator(functions, host, port);
+    // optional: firestore emulator
+    const fsHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || host;
+    const fsPort = Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || '8080');
+    connectFirestoreEmulator(db, fsHost, fsPort);
   }
 }
 
-export { functions };
+export { functions, db };

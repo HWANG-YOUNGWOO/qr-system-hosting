@@ -61,6 +61,14 @@ export const sendOtp = onCall(async (req) => {
     const input = req.data as SendOtpInput;
     const phoneKey = `${input.countryCode}-${input.phoneNumber}`;
 
+    // Server-side control: only allow test mode when environment explicitly permits it.
+    const allowTwilioTest = String(process.env.ALLOW_TWILIO_TEST || '').toLowerCase() === 'true';
+    const requestedTestMode = !!input.testModeFlag && allowTwilioTest;
+    if (!!input.testModeFlag && !allowTwilioTest) {
+      // Log that client requested test mode but server rejected it
+      logError(func, new Error('test_mode_not_allowed'))
+    }
+
     // Re-check registration
     const doc = await db.collection('users_by_phone').doc(phoneKey).get();
     if (!doc.exists) {
@@ -92,7 +100,7 @@ export const sendOtp = onCall(async (req) => {
     const attemptId = uuidv4();
     const now = Date.now();
     const expireAt = now + 5 * 60 * 1000;
-    await db.collection('otpAttempts').doc(attemptId).set({ phoneKey, createdAt: now, expireAt, testModeFlag: !!input.testModeFlag });
+  await db.collection('otpAttempts').doc(attemptId).set({ phoneKey, createdAt: now, expireAt, testModeFlag: requestedTestMode });
 
     // Send to Twilio Verify (do not store the actual code)
     let phoneE164: string;
@@ -102,7 +110,7 @@ export const sendOtp = onCall(async (req) => {
       logError(func, err as Error, { phone: `${input.countryCode}-${input.phoneNumber}` });
       return { messageKey: 'auth.invalidPhone' } as SendOtpResult;
     }
-    const twRes = await sendVerificationCode(phoneE164, !!input.testModeFlag);
+  const twRes = await sendVerificationCode(phoneE164, requestedTestMode);
 
     // compute nextAllowedRequestAt (simple example)
     const nextAllowedRequestAt = now + 30 * 1000;

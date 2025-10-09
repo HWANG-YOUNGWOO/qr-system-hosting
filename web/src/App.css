@@ -40,3 +40,31 @@
 .read-the-docs {
   color: #888;
 }
+
+.login-root {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f6f9ff 0%, #ffffff 100%);
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(20,20,50,0.08);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.title { margin: 0; font-size: 1.4rem }
+.label { font-size: 0.9rem; color: #333 }
+.input { padding: 10px 12px; border-radius: 8px; border: 1px solid #ddd }
+.input.error { border-color: #e03e2d; box-shadow: 0 0 0 3px rgba(224,62,45,0.06) }
+.error-text { color: #e03e2d; font-size: 0.85rem; margin-top: 4px }
+.checkbox { display:flex; gap:8px; align-items:center; font-size:0.9rem }
+.btn { background:#3751ff; color:#fff; padding:10px 12px; border-radius:8px; border:0; cursor:pointer }
+.btn:active { transform: translateY(1px) }
+.status { margin-top:8px; font-size:0.9rem; color:#444 }

@@ -100,6 +100,20 @@ const firebaseConfig = {
 
 ---
 
+### 🔒 Test mode security (Twilio)
+
+The functions support a "test mode" that uses separate Twilio test credentials stored in Secret Manager (`Test-twilio-Account-SID`, `Test-twilio-Auth-token`, optionally `Test-twilio-service-sid`). To avoid accidental use of test credentials in production, the server only honors client requests to enable Test mode when the environment variable `ALLOW_TWILIO_TEST=true` is set for your Functions runtime.
+
+Recommended steps:
+
+- Do NOT set `ALLOW_TWILIO_TEST=true` in production. Only enable it in developer/testing environments.
+- Control the visibility of the client-side toggle via `VITE_ALLOW_TWILIO_TEST` (set to `true` for local/dev builds only).
+- Restrict Secret Manager access to test secrets using IAM and rotate secrets after use.
+- Audit logs: monitor `authEvents` for `test_mode` usage if you need to track test traffic.
+
+
+---
+
 ## 📌 2. 공통 규칙
 
 - **클라이언트 미신뢰 원칙**: 모든 인증/트랜잭션은 백엔드 함수에서 처리  
