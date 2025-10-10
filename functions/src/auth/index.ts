@@ -3,7 +3,7 @@ import * as functions from 'firebase-functions';
 import { logStart, logEnd, logError } from '../utils/logger';
 import { sendVerificationCode, verifyCode } from '../serviceTwilio';
 import { v4 as uuidv4 } from 'uuid';
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { consumeToken } from '../utils/tokenBucket';
 import { hashIp } from '../utils/ipHash';
@@ -80,7 +80,7 @@ export const sendOtp = onCall(async (req) => {
     const requestedTestMode = !!input.testModeFlag && allowTwilioTest;
     if (!!input.testModeFlag && !allowTwilioTest) {
       // Log that client requested test mode but server rejected it
-      logError(func, new Error('test_mode_not_allowed'))
+      logError(func, new Error('test_mode_not_allowed'));
     }
 
     // Re-check registration
@@ -114,7 +114,7 @@ export const sendOtp = onCall(async (req) => {
     const attemptId = uuidv4();
     const now = Date.now();
     const expireAt = now + 5 * 60 * 1000;
-  await db.collection('otpAttempts').doc(attemptId).set({ phoneKey, createdAt: now, expireAt, testModeFlag: requestedTestMode });
+    await db.collection('otpAttempts').doc(attemptId).set({ phoneKey, createdAt: now, expireAt, testModeFlag: requestedTestMode });
 
     // Send to Twilio Verify (do not store the actual code)
     let phoneE164: string;
@@ -124,7 +124,7 @@ export const sendOtp = onCall(async (req) => {
       logError(func, err as Error, { phone: `${input.countryCode}-${input.phoneNumber}` });
       return { messageKey: 'auth.invalidPhone' } as SendOtpResult;
     }
-  const twRes = await sendVerificationCode(phoneE164, requestedTestMode);
+    const twRes = await sendVerificationCode(phoneE164, requestedTestMode);
 
     // compute nextAllowedRequestAt (simple example)
     const nextAllowedRequestAt = now + 30 * 1000;
@@ -132,7 +132,15 @@ export const sendOtp = onCall(async (req) => {
     logEnd(func, { attemptId, twRes: { status: twRes.status } });
     return { attemptId, nextAllowedRequestAt, expireAt, messageKey: 'auth.otpSent' } as SendOtpResult;
   } catch (err) {
-    logError('auth.sendOtp', err);
+    // Enhanced error logging: include request details and write an authEvents record
+    try {
+      const phoneKeySafe = (req.data && req.data.countryCode && req.data.phoneNumber) ? `${req.data.countryCode}-${req.data.phoneNumber}` : null;
+      logError(func, err as Error, { request: req.data, phoneKey: phoneKeySafe });
+      await db.collection('authEvents').doc().set({ type: 'error', uid: null, phoneKey: phoneKeySafe, error: String((err as Error)?.message || err), ts: Date.now() });
+    } catch (logErr) {
+      // If logging itself fails, ensure we still return a generic error
+      logError(func, logErr as Error);
+    }
     return { messageKey: 'auth.error' } as SendOtpResult;
   }
 });
