@@ -49,7 +49,14 @@ async function getTwilioConfig(testMode = false) {
   const serviceSid = serviceSidCandidate || serviceSidFallback;
 
   if (!accountSid || !authToken || !serviceSid) {
-    throw new Error('Twilio secrets not properly configured');
+    const missing: string[] = [];
+    if (!accountSid) missing.push(testMode ? 'Test-twilio-Account-SID' : 'twilio-sid');
+    if (!authToken) missing.push(testMode ? 'Test-twilio-Auth-token' : 'twilio-token');
+    if (!serviceSid) missing.push('twilio-service-sid or Test-twilio-service-sid');
+    const msg = `Twilio secrets not properly configured: missing ${missing.join(', ')}`;
+    // Log a non-sensitive error to help debugging which secret name(s) are missing.
+    logError('getTwilioConfig', new Error(msg));
+    throw new Error(msg);
   }
 
   return { accountSid, authToken, serviceSid };

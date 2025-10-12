@@ -8,8 +8,7 @@
 */
 
 import { setGlobalOptions } from 'firebase-functions';
-import { onRequest } from 'firebase-functions/https';
-import { onCall } from 'firebase-functions/v2/https';
+import { onRequest, onCall } from 'firebase-functions/https';
 import * as logger from 'firebase-functions/logger';
 import * as auth from './auth/index';
 
@@ -33,6 +32,7 @@ setGlobalOptions({ maxInstances: 10 });
 //   response.send("Hello from Firebase!");
 // });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const helloWorld = onRequest((request: any, response: any) => {
   logger.info('helloWorld called');
   response.status(200).send('Hello from Firebase (helloWorld)');

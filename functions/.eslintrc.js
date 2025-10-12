@@ -14,20 +14,21 @@ module.exports = {
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    project: ['tsconfig.json', 'tsconfig.dev.json'],
+    project: ['tsconfig.eslint.json'],
     sourceType: 'module',
   },
   settings: {
     'import/resolver': {
       typescript: {
-        // point the resolver at the TS config(s) so it can resolve path mappings and project files
-        project: ['tsconfig.json', 'tsconfig.dev.json'],
+        // point the resolver at the TS config for ESLint so it can resolve JS/TS files during linting
+        project: ['tsconfig.eslint.json'],
       },
     },
   },
   ignorePatterns: [
     '/lib/**/*', // Ignore built files.
     '/generated/**/*', // Ignore generated files.
+    'src/**/*.js', // ignore JS files so TypeScript project parsing doesn't error
   ],
   plugins: [
     '@typescript-eslint',
