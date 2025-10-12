@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ '**' ]
   pull_request:
-    branches: [ main ]
+    branches: [ '**' ]
   workflow_dispatch: {}
 
 jobs:
@@ -31,11 +31,15 @@ jobs:
             echo "One or more screenshot assets are missing. Add them to .github/assets/ or update README_SECRETS.md."; exit 1;
           fi
 
-      - name: Setup Node.js
+      - name: Setup Node.js (tooling)
         uses: actions/setup-node@v4
         with:
+          # Use Node 18 for general CI tooling, but we'll use Node 22 when installing functions
           node-version: '18'
           cache: 'npm'
+          cache-dependency-path: |
+            functions/package-lock.json
+            web/package-lock.json
 
       - name: Cache node modules (functions)
         uses: actions/cache@v4
@@ -53,10 +57,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-web-node-
 
-      - name: Install functions deps
+      - name: Install functions deps (robust)
         run: |
+          # Some projects target Node 22 (Cloud Functions), but the runner uses Node 18 for tooling.
+          # Try a resilient install: prefer `npm ci` for reproducible installs, but fall back to `npm install`
+          # if the lockfile is out of sync (common when lockfile wasn't regenerated after package.json changes).
+          set -e
+          echo "Installing functions dependencies (attempting npm ci, falling back to npm install if needed)"
           cd functions
-          npm ci
+          if npm ci --prefer-offline; then
+            echo "npm ci completed successfully"
+          else
+            echo "npm ci failed (lockfile mismatch?). Trying npm install as a fallback"
+            npm install || (
+              echo "npm install also failed. You should regenerate functions/package-lock.json locally with 'npm install' using Node >=22 and commit the updated lockfile.";
+              exit 1
+            )
+          fi
 
       - name: Install web deps
         run: |
@@ -72,6 +89,11 @@ jobs:
         run: |
           cd functions
           npm run build
+
+      - name: Test functions
+        run: |
+          cd functions
+          npm test
 
       - name: Lint web
         run: |
@@ -168,5 +190,5 @@ jobs:
           echo "Run any smoke tests or health checks here"
 
 # Notes:
-# - Set repository secrets: FIREBASE_SERVICE_ACCOUNT (JSON), FIREBASE_TOKEN (CI token with deploy permissions)
+# - Set repository secrets: FIREBASE_SERVICE_ACCOUNT (JSON), FIREBASE_TOKEN (CI token with deploy permissions).
 # - This workflow keeps deploy manual/conditional; adapt as needed for automatic deploys.

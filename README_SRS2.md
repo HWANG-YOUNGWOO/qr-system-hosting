@@ -13,13 +13,18 @@ Firebase, Twilio, TypeScript 기반의 **안전한 OTP 인증 및 세션 관리 
 - **문자 OTP 전송**: Twilio  
 
 ### 🔑 Twilio Credentials
+
+NOTE: The original copy of this file contained hardcoded Twilio secrets. Those values have been REDACTED here.
+
 - **Live**
   - Account SID: `<YOUR_TWILIO_ACCOUNT_SID>`
-  - Auth Token: `9d4714ecfa1b1377bb0de512222de934`
-  - Verify Service SID: `VA08f96fc0851eb8fb1438b06b4f0f64cc`
+  - Auth Token: `<REDACTED — rotate immediately>`
+  - Verify Service SID: `<REDACTED — rotate immediately>`
 - **Test**
-  - Account SID: `<YOUR_TWILIO_ACCOUNT_SID>`
-  - Auth Token: `5f853f1d1c22ed01737663d9fe279931`
+  - Account SID: `<YOUR_TWILIO_TEST_ACCOUNT_SID>`
+  - Auth Token: `<REDACTED — rotate immediately>`
+
+Security action required: If you (or anyone) have published real secrets in this repository or any commit, rotate those credentials immediately (Twilio Console) and follow the repository history purge steps described in docs/SECRET_ROTATION.md.
 
 ### ☁️ Google Cloud Secret Manager 등록 항목
 - twilio-service-sid  
@@ -27,6 +32,58 @@ Firebase, Twilio, TypeScript 기반의 **안전한 OTP 인증 및 세션 관리 
 - twilio-token  
 - Test-twilio-Account-SID  
 - Test-twilio-Auth-token  
+
+#### 사용법 및 로컬 테스트
+
+1) 시크릿 생성(예시: gcloud CLI)
+
+```powershell
+# 프로젝트가 설정된 gcloud 환경에서
+gcloud secrets create twilio-sid --replication-policy="automatic"
+echo -n "<TWILIO_ACCOUNT_SID>" | gcloud secrets versions add twilio-sid --data-file=-
+
+gcloud secrets create twilio-token --replication-policy="automatic"
+echo -n "<TWILIO_AUTH_TOKEN>" | gcloud secrets versions add twilio-token --data-file=-
+
+gcloud secrets create twilio-service-sid --replication-policy="automatic"
+echo -n "<TWILIO_VERIFY_SERVICE_SID>" | gcloud secrets versions add twilio-service-sid --data-file=-
+```
+
+2) 시크릿 네이밍 규칙
+
+- 라이브: `twilio-sid`, `twilio-token`, `twilio-service-sid`
+- 테스트(선택): `Test-twilio-Account-SID`, `Test-twilio-Auth-token`, (선택) `Test-twilio-service-sid`
+
+3) 로컬 개발(Secret Manager 미사용) 폴백
+
+serviceTwilio 모듈은 먼저 환경변수로부터 값을 읽고(env 우선), 없으면 Google Secret Manager에서 값을 가져옵니다. 환경변수 이름(우선순위 예시):
+
+- TWILIO_ACCOUNT_SID (또는 TWILIO_SID)
+- TWILIO_AUTH_TOKEN (또는 TWILIO_TOKEN)
+- TWILIO_VERIFY_SERVICE_SID (또는 TWILIO_SERVICE_SID)
+
+4) 간단한 스모크 테스트 실행
+
+저장소에 포함된 간단한 테스트 스크립트로 env 폴백이 동작하는지 확인할 수 있습니다. 이 파일은 TypeScript(.ts)이며 아래 방법으로 실행하세요.
+
+```powershell
+# 1) ts-node가 설치되어 있으면 바로 실행
+npx ts-node ./functions/test/serviceTwilio.mock.test.ts
+
+# 2) 또는 프로젝트를 빌드한 후 Node로 실행
+npx tsc -p tsconfig.dev.json
+node ./functions/test/serviceTwilio.mock.test.js
+```
+
+테스트는 실제 Twilio 네트워크 호출을 수행하지 않으며, 환경변수/Secret Manager 파싱과 클라이언트 인스턴스화 경로만 간단히 검증합니다.
+
+5) 추가 보안 권장사항
+
+- 시크릿 생성 직후에는 Twilio 콘솔에서 토큰을 교체(rotate)하고, 과거에 노출된 자격증명은 즉시 폐기하세요.
+- 리포지토리 히스토리에 시크릿이 남아 있는 경우 `docs/SECRET_ROTATION.md`의 지침을 따르세요.
+
+Note: If you need to regenerate `functions/package-lock.json` (e.g., after adding dev deps like Jest), use the helper script `.github/scripts/regenerate-functions-lock.ps1`. Run it with Node 22 available and optionally pass `-AutoCommit` to commit & push the updated lockfile.
+
 
 ### 🔧 Firebase Config
 ```typescript
@@ -40,6 +97,90 @@ const firebaseConfig = {
   measurementId: "G-0B45SHS9V6"
 };
 ```
+
+---
+
+### 🔒 Test mode security (Twilio)
+
+The functions support a "test mode" that uses separate Twilio test credentials stored in Secret Manager (`Test-twilio-Account-SID`, `Test-twilio-Auth-token`, optionally `Test-twilio-service-sid`). To avoid accidental use of test credentials in production, the server only honors client requests to enable Test mode when the environment variable `ALLOW_TWILIO_TEST=true` is set for your Functions runtime.
+
+Recommended steps:
+
+- Do NOT set `ALLOW_TWILIO_TEST=true` in production. Only enable it in developer/testing environments.
+- Control the visibility of the client-side toggle via `VITE_ALLOW_TWILIO_TEST` (set to `true` for local/dev builds only).
+- Restrict Secret Manager access to test secrets using IAM and rotate secrets after use.
+- Audit logs: monitor `authEvents` for `test_mode` usage if you need to track test traffic.
+
+#### 배포 및 설정(빠른 가이드)
+
+다음은 Firebase 프로젝트에 `twilio.allow_test` 값을 안전하게 설정하고 검증하는 방법입니다. PowerShell에서 복사-붙여넣기 가능한 명령과 검증 방법을 제공합니다.
+
+방법 A — `functions.config()` 사용 (Firebase CLI)
+
+- 설정(개발 환경에서만 `true`로 설정):
+
+```powershell
+# 프로젝트 확인
+firebase use
+
+# 개발환경에서만 허용
+firebase functions:config:set twilio.allow_test="true"
+
+# 설정 확인
+firebase functions:config:get | ConvertFrom-Json
+```
+
+- 함수 재배포:
+
+```powershell
+firebase deploy --only functions
+```
+
+- 롤백:
+
+```powershell
+firebase functions:config:unset twilio.allow_test
+firebase deploy --only functions
+```
+
+방법 B — Cloud Functions v2 환경변수 (gcloud 사용)
+
+- 배포 시 환경변수 설정(예시):
+
+```powershell
+gcloud functions deploy sendOtp `
+  --gen2 `
+  --region=us-central1 `
+  --runtime=nodejs22 `
+  --entry-point=sendOtp `
+  --set-env-vars=ALLOW_TWILIO_TEST=true
+```
+
+- 기존 함수에 업데이트(예시):
+
+```powershell
+gcloud functions update sendOtp --set-env-vars=ALLOW_TWILIO_TEST=true --region=us-central1
+```
+
+- 환경변수 확인:
+
+```powershell
+gcloud functions describe sendOtp --region=us-central1 --format="json" | ConvertFrom-Json
+# 결과의 environmentVariables 필드를 확인하세요
+```
+
+검증 체크리스트
+
+- deploy/설정 후 `firebase functions:log --only sendOtp` 또는 Firebase 콘솔 로그에서 호출/거부 로그를 확인하세요.
+- 클라이언트(또는 curl/postman)를 사용해 `testModeFlag=true`로 `sendOtp`를 호출해 보고, Firestore의 `otpAttempts` 문서에 `testModeFlag: true`로 저장되는지 확인하세요.
+- 프로덕션에서는 절대 `twilio.allow_test` 또는 `ALLOW_TWILIO_TEST=true`를 설정하지 마세요.
+
+보안 권장
+
+- Test 시크릿(Secret Manager) 접근 권한은 최소 권한으로 제한하세요.
+- `authEvents`에 `test_mode_requested`/`test_mode_used` 이벤트를 로깅하면 감사 추적에 도움이 됩니다.
+
+
 
 ---
 

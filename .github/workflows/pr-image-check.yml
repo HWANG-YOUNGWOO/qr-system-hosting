@@ -15,13 +15,34 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Run screenshot-check script
+        uses: actions/github-script@v6
         with:
-          node-version: '18'
-
-      - name: Run screenshot-check script (Node)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          node .github/scripts/pr-image-check.clean.js
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = '.github/scripts/pr-image-check.clean.js';
+            // Provide a safe 'core' fallback for the eval context. github-script does not
+            // automatically inject '@actions/core', but the external script expects a
+            // `core` object with info/setFailed methods. Create a tiny wrapper that
+            // forwards to console when real core isn't available.
+            const safeCore = {
+              info: (msg) => { try { console.log(msg); } catch(e) {} },
+              setFailed: (msg) => { try { throw new Error(msg); } catch(e) { throw e } }
+            };
+            if (!fs.existsSync(path)) {
+              console.log('No script at ' + path + ', skipping screenshot check.');
+              return;
+            }
+            const code = fs.readFileSync(path, 'utf8');
+            // eslint-disable-next-line no-eval
+            const module = { exports: {} };
+            // evaluate the module code in this context; it should populate module.exports
+            eval(code);
+            const fn = module.exports && (typeof module.exports === 'function' ? module.exports : module.exports.default) || null;
+            if (typeof fn === 'function') {
+              // pass our safeCore so the module can call core.info/core.setFailed
+              await fn({ github, context, core: (typeof core !== 'undefined' ? core : safeCore) });
+            } else {
+              console.log('No callable export from ' + path + ', skipping.');
+            }

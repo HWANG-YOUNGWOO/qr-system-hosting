@@ -10,7 +10,24 @@ async function getSecret(name: string) {
 }
 
 async function getTwilioConfig(testMode = false) {
-  const project = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
+  // Env var first: allow local development without Secret Manager.
+  const envAccount = process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_SID;
+  const envAuth = process.env.TWILIO_AUTH_TOKEN || process.env.TWILIO_TOKEN;
+  const envService = process.env.TWILIO_VERIFY_SERVICE_SID || process.env.TWILIO_SERVICE_SID || process.env.TWILIO_SERVICE_SID;
+  if (envAccount && envAuth && envService) {
+    return { accountSid: envAccount, authToken: envAuth, serviceSid: envService };
+  }
+
+  // Resolve GCP project id from common envs; allow FIREBASE_CONFIG JSON as a local-dev fallback.
+  let project = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
+  if (!project && process.env.FIREBASE_CONFIG) {
+    try {
+      const cfg = JSON.parse(process.env.FIREBASE_CONFIG);
+      if (cfg && cfg.projectId) project = cfg.projectId;
+    } catch (err) {
+      // ignore parse errors and continue to throw below if still missing
+    }
+  }
   if (!project) throw new Error('GCP project not set');
 
   const accountSidName = testMode
@@ -32,7 +49,14 @@ async function getTwilioConfig(testMode = false) {
   const serviceSid = serviceSidCandidate || serviceSidFallback;
 
   if (!accountSid || !authToken || !serviceSid) {
-    throw new Error('Twilio secrets not properly configured');
+    const missing: string[] = [];
+    if (!accountSid) missing.push(testMode ? 'Test-twilio-Account-SID' : 'twilio-sid');
+    if (!authToken) missing.push(testMode ? 'Test-twilio-Auth-token' : 'twilio-token');
+    if (!serviceSid) missing.push('twilio-service-sid or Test-twilio-service-sid');
+    const msg = `Twilio secrets not properly configured: missing ${missing.join(', ')}`;
+    // Log a non-sensitive error to help debugging which secret name(s) are missing.
+    logError('getTwilioConfig', new Error(msg));
+    throw new Error(msg);
   }
 
   return { accountSid, authToken, serviceSid };
@@ -54,13 +78,11 @@ export async function getTwilioClient(testMode = false) {
  */
 export async function sendVerificationCode(phone: string, testMode = false) {
   const func = 'serviceTwilio.sendVerificationCode';
-  // Log only last 4 digits for privacy by default.
   const phoneLast4 = String(phone).slice(-4);
   logStart(func, { phoneLast4, testMode });
   try {
     const cfg = await getTwilioConfig(testMode);
     const client = Twilio(cfg.accountSid, cfg.authToken);
-    // Twilio expects E.164. We pass the phone through as given; callers should normalize.
     const res = await client.verify.services(cfg.serviceSid).verifications.create({ to: phone, channel: 'sms' });
     logEnd(func, { sid: res.sid, status: res.status });
     return { sid: res.sid, status: res.status, serviceSid: cfg.serviceSid };
@@ -81,7 +103,7 @@ export async function verifyCode(phone: string, code: string, testMode = false) 
     const cfg = await getTwilioConfig(testMode);
     const client = Twilio(cfg.accountSid, cfg.authToken);
     const res = await client.verify.services(cfg.serviceSid).verificationChecks.create({ to: phone, code });
-    const valid = res.status === 'approved' || res.status === 'approved';
+    const valid = res.status === 'approved';
     logEnd(func, { status: res.status });
     return { valid, status: res.status };
   } catch (err) {

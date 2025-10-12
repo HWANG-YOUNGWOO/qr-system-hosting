@@ -1,0 +1,5 @@
+# Ignore helper scripts not part of the functions source tree
+scripts/
+
+# Ignore node_modules if not already ignored by parent
+node_modules/
