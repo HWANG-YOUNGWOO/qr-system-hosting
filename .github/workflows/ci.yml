@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: TypeScript root check
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Install functions deps
+        run: npm ci --prefix functions
+
+      - name: TypeScript functions check
+        run: node ./functions/node_modules/typescript/lib/tsc.js -p ./functions/tsconfig.json --noEmit
+
+      - name: ESLint functions (TS & JS)
+        run: node ./functions/node_modules/eslint/bin/eslint.js ./functions/src --max-warnings=0
+
+      - name: Install web deps
+        run: npm ci --prefix web
+
+      - name: ESLint web (TS)
+        run: ./web/node_modules/.bin/eslint --ext .ts ./web/src --max-warnings=0
+
+      - name: TypeScript web build
+        run: npm --prefix web run build --if-present
